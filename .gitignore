@@ -24,3 +24,5 @@ expt-*.tar
 
 .elixir_ls/
 
+# Output files
+*.png
