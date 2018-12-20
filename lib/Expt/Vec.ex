@@ -1,5 +1,5 @@
-defmodule Expt.Vec3 do
-    alias Expt.Vec3
+defmodule Expt.Vec do
+    alias Expt.Vec
 
     def create(x, y, z) do
         {x, y, z}
@@ -26,13 +26,13 @@ defmodule Expt.Vec3 do
         x*x + y*y + z*z
     end
     def length(vec) do
-        vec |> Vec3.length_squared |> :math.sqrt
+        vec |> Vec.length_squared |> :math.sqrt
     end
     def normalize(vec) do
-        vec |> Vec3.div(vec |> Vec3.length)
+        vec |> Vec.div(vec |> Vec.length)
     end
     def dot(vec1, vec2) do
-        Enum.reduce(vec1 |> Vec3.add(vec2), fn(x, acc) -> x + acc end)
+        Enum.reduce(vec1 |> Vec.add(vec2), fn(x, acc) -> x + acc end)
     end
     def cross({x1, y1, z1}, {x2, y2, z2}) do
         {
