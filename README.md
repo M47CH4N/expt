@@ -1,21 +1,34 @@
 # Expt
+A simple Pathtracer written in Elixir.
 
-**TODO: Add description**
+![cornellbox](https://github.com/M47CH4N/expt/blob/images/cornellbox.png)
 
-## Installation
+## Features
+- Shapes
+  - Sphere
+- Reflection Models
+  - Lambertian (with Cosine weighted importance sampling)
+  - Specular
+  - Refraction
+- Other Accelerations
+  - Next Event Estimation(Direct illumination)
+  - Parallel rendering
 
-If [available in Hex](https://hex.pm/docs/publish), the package can be installed
-by adding `expt` to your list of dependencies in `mix.exs`:
-
-```elixir
-def deps do
-  [
-    {:expt, "~> 0.1.0"}
-  ]
-end
+## Usage
+```bash
+$ git clone github.com:M47CH4N/expt.git && cd ./expt
+$ mix deps.get
+$ mix run ./scene/cornellbox.exs
 ```
 
-Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_doc)
-and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
-be found at [https://hexdocs.pm/expt](https://hexdocs.pm/expt).
+## Benchmarks
+On Ryzen 7 2700X @3.7GHz
 
+|scene|1x1spp|
+|:--|--:|
+|cornellbox|8.532s|
+
+## LICENSE
+Expt is released under the MIT License([LICENSE file](https://github.com/M47CH4N/expt/blob/master/LICENSE)).
+
+A part of this software is based on [githole/edupt](http://kagamin.net/hole/edupt/index.htm) and [xavier/exray](https://github.com/xavier/exray).

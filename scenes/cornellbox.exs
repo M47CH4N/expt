@@ -1,6 +1,6 @@
 scene = Expt.Scene.create(
   samples: 1,
-  supersamples: 2,
+  supersamples: 1,
   camera: Expt.Camera.create([
     position: {50.0, 52.0, 220.0},
     direction: {0.0, -0.04, -1.0},
