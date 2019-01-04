@@ -67,7 +67,7 @@ defmodule Expt.Renderer do
                 scr_y * ((r2 + y) / h - 0.5)
 
         ray = Ray.create(pos, normalize(scr_p - pos))
-        Renderer.radiance(scene, ray, Const.white, true, 0) / s / ss
+        Renderer.radiance(scene, ray, Const.white, true, 0) / s / (ss*ss)
       end
       |> Enum.reduce(Const.black, fn(radiance, acc) -> acc + radiance end)
     end
@@ -75,12 +75,14 @@ defmodule Expt.Renderer do
 
   def radiance(scene, %Ray{} = ray, weight, is_direct, depth) do
     case Scene.intersect(scene, ray) do
+      {:ng, _} -> Const.black
       {:ok, %Intersection{} = intersection} ->
         {:ok, %{material: %Material{} = mtl}} = Enum.fetch(scene.objects, intersection.id)
         o_n = orienting_normal(ray.dir, intersection.normal)
 
         direct_light(is_direct, mtl.emission, weight) +
         case russian_roulette(mtl.color, depth) do
+          {:ng, _} -> Const.black
           {:ok, rr_prob} ->
             case mtl.type do
               "Diffuse" ->
@@ -91,18 +93,12 @@ defmodule Expt.Renderer do
               "Refraction" ->
                 refraction(scene, o_n, ray.dir, intersection, mtl, rr_prob, weight, depth)
             end
-          {:ng, _} -> Const.black
         end
-      {:ng, _} -> Const.black
     end
   end
 
   def direct_light(is_direct, emission, weight) do
-    if is_direct do
-      weight * emission
-    else
-      Const.black
-    end
+    if is_direct, do: weight * emission, else: Const.black
   end
 
   def orienting_normal(d, n) do
@@ -124,7 +120,9 @@ defmodule Expt.Renderer do
   end
 
   def next_event_estimation(scene, intersection, color, weight, orienting_n) do
-    unless Enum.member?(scene.light_id, intersection.id) do
+    if Enum.member?(scene.light_id, intersection.id) do
+      Const.black
+    else
       {light_pos, light_pdf, light_id} = Scene.sample_light_surface(scene)
       light_dir  = light_pos - intersection.position
       dist_sq    = dot(light_dir, light_dir)
@@ -142,10 +140,9 @@ defmodule Expt.Renderer do
           g    = dot1 * dot2 / dist_sq
 
           weight * light.material.emission * (color / :math.pi) * g / light_pdf
+
         _ -> Const.black
       end
-    else
-      Const.black
     end
   end
 
