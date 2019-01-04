@@ -1,5 +1,8 @@
 defmodule Expt.Sphere do
-  alias Expt.{Material, Ray, Vec, Sphere, Intersection, Const}
+  alias Expt.{Material, Ray, Sphere, Intersection, Const}
+  import Expt.Operator
+  import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
+
   defstruct pos: nil, radius: nil, material: %Material{}
 
   def get_pdf(%Sphere{radius: r}), do: 1.0/(4.0*:math.pi*r*r)
@@ -8,18 +11,14 @@ defmodule Expt.Sphere do
     r1 = 2 * :math.pi * :rand.uniform
     r2 = 1.0 - 2.0 * :rand.uniform
     r3 = :math.sqrt(1.0 - r2 * r2)
-    pos |> Vec.add(
-      {r3 * :math.cos(r1), r3 * :math.sin(r1), r2}
-      |> Vec.normalize
-      |> Vec.mul(r)
-    )
+    pos + normalize({r3 * :math.cos(r1), r3 * :math.sin(r1), r2}) * r
   end
 
   def intersect(%Sphere{pos: p, radius: r}, %Ray{org: o, dir: d}) do
-    p_o =  p |> Vec.sub(o)
-    b2 = p_o |> Vec.dot(d)
-    c  = (p_o |> Vec.dot(p_o)) - r*r
-    d4 = b2*b2 - c
+    p_o = p - o
+    b2  = dot(p_o, d)
+    c   = dot(p_o, p_o) - r*r
+    d4  = b2*b2 - c
     if d4 < 0 do
       {:ng, nil}
     else
@@ -29,11 +28,11 @@ defmodule Expt.Sphere do
         {:ng, nil}
       else
         t = if t1 > Const.eps, do: t1, else: t2
-        pos = o |> Vec.add(Vec.mul(d, t))
+        pos = o + d * t
         {:ok, %Intersection{
           position: pos,
           distance: t,
-          normal: (pos |> Vec.sub(p)) |> Vec.normalize,
+          normal: (pos - p) |> normalize,
         }}
       end
     end

@@ -1,5 +1,7 @@
 defmodule Expt.Camera do
-  alias Expt.{Vec, Camera}
+  alias Expt.{Camera}
+  import Expt.Operator
+  import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
   defstruct width: nil, height: nil, position: nil, screen_x: nil, screen_y: nil, screen_center: nil
 
   def create(options \\ []) do
@@ -14,12 +16,12 @@ defmodule Expt.Camera do
       screen_distance: scr_d
     } = Keyword.merge(defaults, options) |> Enum.into(%{})
 
-    dir = dir |> Vec.normalize
-    up  = up  |> Vec.normalize
+    ndir  = dir |> normalize
+    nup   = up  |> normalize
     scr_w = scr_h * width / height
-    scr_x = dir   |> Vec.cross(up)  |> Vec.normalize |> Vec.mul(scr_w)
-    scr_y = scr_x |> Vec.cross(dir) |> Vec.normalize |> Vec.mul(scr_h)
-    scr_c = pos   |> Vec.add(Vec.mul(dir, scr_d))
+    scr_x = normalize(cross(ndir, nup))  * scr_w
+    scr_y = normalize(cross(scr_x, dir)) * scr_h
+    scr_c = pos + ndir * scr_d
 
     %Camera{
       width: width,

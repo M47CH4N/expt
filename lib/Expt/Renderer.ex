@@ -1,5 +1,7 @@
 defmodule Expt.Renderer do
-  alias Expt.{Renderer, Camera, Scene, Ray, Vec, Material, Intersection, Const}
+  alias Expt.{Renderer, Camera, Scene, Ray, Material, Intersection, Const}
+  import Expt.Operator
+  import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
 
   def render_seq(%Scene{} = scene) do
     %Scene{
@@ -60,16 +62,14 @@ defmodule Expt.Renderer do
         r1 = sx * rate + rate / 2.0
         r2 = sy * rate + rate / 2.0
 
-        scr_p = scr_c
-        |> Vec.add(scr_x |> Vec.mul((r1 + x) / w - 0.5))
-        |> Vec.add(scr_y |> Vec.mul((r2 + y) / h - 0.5))
+        scr_p = scr_c +
+                scr_x * ((r1 + x) / w - 0.5) +
+                scr_y * ((r2 + y) / h - 0.5)
 
-        ray = Ray.create(pos, scr_p |> Vec.sub(pos) |> Vec.normalize)
-        Renderer.radiance(scene, ray, Const.white, true, 0)
-        |> Vec.div(s)
-        |> Vec.div(ss*ss)
+        ray = Ray.create(pos, normalize(scr_p - pos))
+        Renderer.radiance(scene, ray, Const.white, true, 0) / s / ss
       end
-      |> Enum.reduce(Const.black, fn(radiance, acc) -> acc |> Vec.add(radiance) end)
+      |> Enum.reduce(Const.black, fn(radiance, acc) -> acc + radiance end)
     end
   end
 
@@ -79,34 +79,34 @@ defmodule Expt.Renderer do
         {:ok, %{material: %Material{} = mtl}} = Enum.fetch(scene.objects, intersection.id)
         o_n = orienting_normal(ray.dir, intersection.normal)
 
+        direct_light(is_direct, mtl.emission, weight) +
         case russian_roulette(mtl.color, depth) do
           {:ok, rr_prob} ->
             case mtl.type do
               "Diffuse" ->
-                diffuse(scene, o_n, intersection, mtl, rr_prob, weight, depth)
-                |> Vec.add(next_event_estimation(scene, intersection, mtl.color, weight, o_n))
+                diffuse(scene, o_n, intersection, mtl, rr_prob, weight, depth) +
+                next_event_estimation(scene, intersection, mtl.color, weight, o_n)
               "Specular" ->
                 specular(scene, ray.dir, intersection, mtl, rr_prob, weight, depth)
               "Refraction" ->
                 refraction(scene, o_n, ray.dir, intersection, mtl, rr_prob, weight, depth)
             end
           {:ng, _} -> Const.black
-        end |> Vec.add(direct_light(is_direct, mtl.emission, weight))
+        end
       {:ng, _} -> Const.black
     end
   end
 
   def direct_light(is_direct, emission, weight) do
     if is_direct do
-      weight
-      |> Vec.mul(emission)
+      weight * emission
     else
       Const.black
     end
   end
 
   def orienting_normal(d, n) do
-    n |> Vec.mul(if (Vec.dot(n, d) < 0.0), do: 1.0, else: -1.0)
+    if (dot(n, d) < 0.0), do: n, else: -1.0*n
   end
 
   def russian_roulette(color, depth) do
@@ -126,9 +126,9 @@ defmodule Expt.Renderer do
   def next_event_estimation(scene, intersection, color, weight, orienting_n) do
     unless Enum.member?(scene.light_id, intersection.id) do
       {light_pos, light_pdf, light_id} = Scene.sample_light_surface(scene)
-      light_dir  = light_pos |> Vec.sub(intersection.position)
-      dist_sq    = light_dir |> Vec.dot(light_dir)
-      nlight_dir = light_dir |> Vec.normalize
+      light_dir  = light_pos - intersection.position
+      dist_sq    = dot(light_dir, light_dir)
+      nlight_dir = normalize(light_dir)
       shadow_ray = Ray.create(intersection.position, nlight_dir)
 
       case Scene.intersect(scene, shadow_ray) do
@@ -137,15 +137,11 @@ defmodule Expt.Renderer do
           id: ^light_id
         }} ->
           {:ok, light} = Enum.fetch(scene.objects, light_id)
-          dot1 = abs(Vec.dot(orienting_n, nlight_dir))
-          dot2 = abs(Vec.dot(light_n, Vec.mul(nlight_dir, -1.0)))
-          g = dot1 * dot2 / dist_sq
+          dot1 = dot(orienting_n, nlight_dir) |> abs
+          dot2 = dot(light_n, nlight_dir * -1.0) |> abs
+          g    = dot1 * dot2 / dist_sq
 
-          weight
-          |> Vec.mul(light.material.emission)
-          |> Vec.mul(color |> Vec.div(:math.pi))
-          |> Vec.mul(g)
-          |> Vec.div(light_pdf)
+          weight * light.material.emission * (color / :math.pi) * g / light_pdf
         _ -> Const.black
       end
     else
@@ -155,30 +151,29 @@ defmodule Expt.Renderer do
 
   def diffuse(scene, o_n, intersection, mtl, rr_prob, weight, depth) do
     new_ray = cos_weighted_sample(intersection, get_onb(o_n))
-    new_weight = weight
-    |> Vec.mul(mtl.color |> Vec.div(rr_prob))
+    new_weight = weight * mtl.color / rr_prob
     Renderer.radiance(scene, new_ray, new_weight, false, depth+1)
   end
 
   def specular(scene, dir, intersection, mtl, rr_prob, weight, depth) do
     reflec = get_reflect(intersection, dir)
-    new_weight = weight |> Vec.mul(mtl.color |> Vec.div(rr_prob))
+    new_weight = weight * mtl.color / rr_prob
     Renderer.radiance(scene, reflec, new_weight, true, depth+1)
   end
 
   def refraction(scene, o_n, dir, intersection, mtl, rr_prob, weight, depth) do
     reflec = get_reflect(intersection, dir)
-    into = Vec.dot(intersection.normal, o_n) > 0.0
+    into = dot(intersection.normal, o_n) > 0.0
 
     # Snell's low
     nc = 1.0
     nt = mtl.ior
     nnt = if into, do: nc / nt, else: nt / nc
-    ddn = Vec.dot(dir, o_n)
+    ddn = dot(dir, o_n)
     cos2t = 1.0 - nnt*nnt * (1.0 - ddn*ddn)
 
     if cos2t < 0.0 do
-      new_weight = weight |> Vec.mul(mtl.color |> Vec.div(rr_prob))
+      new_weight = weight * mtl.color / rr_prob
       Renderer.radiance(scene, reflec, new_weight, true, depth+1)
     else
       refrac = get_refract(intersection, dir, nnt, into, ddn, nnt, cos2t)
@@ -188,17 +183,17 @@ defmodule Expt.Renderer do
       be = nt + nc
       r0 = (al*al) / (be*be)
 
-      th = 1.0 - (if into, do: -ddn, else: Vec.dot(refrac.dir, Vec.mul(o_n, -1.0)))
+      th = 1.0 - (if into, do: -ddn, else: dot(refrac.dir, o_n * -1.0))
       re = r0 + (1.0 - r0) * :math.pow(th, 5.0)
       nnt2 = :math.pow((if into, do: nc / nt, else: nt / nc), 2.0)
       tr = (1.0 - re) * nnt2
 
       prob = 0.25 + 0.5 * re
       if :rand.uniform < prob do
-        new_weight = weight |> Vec.mul(mtl.color |> Vec.mul(re / prob / rr_prob))
+        new_weight = weight * mtl.color * re / prob / rr_prob
         Renderer.radiance(scene, reflec, new_weight, true, depth+1)
       else
-        new_weight = weight |> Vec.mul(mtl.color |> Vec.mul(tr / (1.0-prob) / rr_prob))
+        new_weight = weight * mtl.color * tr / (1.0-prob) / rr_prob
         Renderer.radiance(scene, refrac, new_weight, true, depth+1)
       end
     end
@@ -212,9 +207,9 @@ defmodule Expt.Renderer do
     else
       {1.0, 0.0, 0.0}
     end
-    |> Vec.cross(w)
-    |> Vec.normalize
-    v = w |> Vec.cross(u)
+    |> cross(w)
+    |> normalize
+    v = w |> cross(u)
     %{w: w, u: u, v: v}
   end
 
@@ -224,33 +219,26 @@ defmodule Expt.Renderer do
     r2s = :math.sqrt(r2)
     Ray.create(
       intersection.position,
-      onb.u            |> Vec.mul(:math.cos(r1) * r2s)
-      |> Vec.add(onb.v |> Vec.mul(:math.sin(r1) * r2s))
-      |> Vec.add(onb.w |> Vec.mul(:math.sqrt(1.0 - r2)))
-      |> Vec.normalize
-    )
-
+      normalize(
+        onb.u * :math.cos(r1) * r2s +
+        onb.v * :math.sin(r1) * r2s +
+        onb.w * :math.sqrt(1.0 - r2)))
   end
 
   def get_reflect(intersection, dir) do
     Ray.create(
       intersection.position,
-      dir
-      |> Vec.sub(
-        Vec.mul(intersection.normal, 2.0 * Vec.dot(intersection.normal, dir))
-      )
-    )
+      dir - intersection.normal * 2.0 * dot(intersection.normal, dir))
   end
 
   def get_refract(intersection, dir, nnt, into, ddn, nnt, cos2t) do
     Ray.create(
       intersection.position,
-      Vec.mul(dir, nnt)
-      |> Vec.sub(
-        Vec.mul(intersection.normal, (if into, do: 1.0, else: -1.0) * (ddn * nnt + :math.sqrt(cos2t)))
-      )
-      |> Vec.normalize
-    )
+      normalize(
+        dir * nnt -
+        intersection.normal * (if into, do: 1.0, else: -1.0) *
+        (ddn * nnt + :math.sqrt(cos2t))
+      ))
   end
 
 end
