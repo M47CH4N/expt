@@ -1,6 +1,6 @@
 defmodule Expt.Camera do
-  defstruct width: nil, height: nil, position: nil, screen_x: nil, screen_y: nil, screen_center: nil
   alias Expt.{Vec, Camera}
+  defstruct width: nil, height: nil, position: nil, screen_x: nil, screen_y: nil, screen_center: nil
 
   def create(options \\ []) do
     defaults = [up: {0.0, 1.0, 0.0}, screen_height: 30.0, screen_distance: 40.0]
@@ -30,4 +30,5 @@ defmodule Expt.Camera do
       screen_center: scr_c
     }
   end
+
 end

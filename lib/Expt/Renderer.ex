@@ -15,28 +15,11 @@ defmodule Expt.Renderer do
       }
     } = scene
 
-    for y <- (height-1)..0 do
-      for x <- 0..(width-1) do
-        for sy <- 0..(supersamples-1),
-            sx <- 0..(supersamples-1),
-            _  <- 0..(samples-1) do
-          rate = 1.0 / supersamples
-          r1 = sx * rate + rate / 2.0
-          r2 = sy * rate + rate / 2.0
-
-          scr_p = scr_c
-          |> Vec.add(scr_x |> Vec.mul((r1 + x) / width - 0.5))
-          |> Vec.add(scr_y |> Vec.mul((r2 + y) / height - 0.5))
-
-          ray = Ray.create(pos, scr_p |> Vec.sub(pos) |> Vec.normalize)
-          Renderer.radiance(scene, ray, 0)
-          |> Vec.div(samples)
-          |> Vec.div(supersamples*supersamples)
-        end
-        |> Enum.reduce(Const.black, fn(radiance, acc) -> acc |> Vec.add(radiance) end)
-      end
+    for y <- 0..(height-1) do
+      render_line(scene, width, height, supersamples, samples, y, scr_c, scr_x, scr_y, pos)
     end
   end
+
   def render(%Scene{} = scene) do
     %Scene{
       samples: samples,
@@ -67,6 +50,7 @@ defmodule Expt.Renderer do
     end
     |> List.flatten
   end
+
   def render_line(scene, w, h, ss, s, y, scr_c, scr_x, scr_y, pos) do
     for x <- 0..(w-1) do
       for sy <- 0..(ss-1),
@@ -81,119 +65,123 @@ defmodule Expt.Renderer do
         |> Vec.add(scr_y |> Vec.mul((r2 + y) / h - 0.5))
 
         ray = Ray.create(pos, scr_p |> Vec.sub(pos) |> Vec.normalize)
-        Renderer.radiance(scene, ray, 0)
+        Renderer.radiance(scene, ray, Const.white, true, 0)
         |> Vec.div(s)
         |> Vec.div(ss*ss)
       end
       |> Enum.reduce(Const.black, fn(radiance, acc) -> acc |> Vec.add(radiance) end)
     end
   end
-  def radiance(scene, %Ray{dir: d} = ray, depth) do
+
+  def radiance(scene, %Ray{} = ray, weight, is_direct, depth) do
     case Scene.intersect(scene, ray) do
-      {:ok,
-        %Intersection{
-          normal: n,
-          position: p,
-          material: %Material{
-            type: material_type,
-            color: c,
-            emission: e,
-            ior: ior
-          }
-        }
-      } ->
-        case Renderer.russian_roulette(c, depth) do
-          {:ok, rrp} ->
-            case material_type do
+      {:ok, %Intersection{} = intersection} ->
+        {:ok, %{material: %Material{} = mtl}} = Enum.fetch(scene.objects, intersection.id)
+        o_n = orienting_normal(ray.dir, intersection.normal)
+
+        case russian_roulette(mtl.color, depth) do
+          {:ok, rr_prob} ->
+            case mtl.type do
               "Diffuse" ->
-                diffuse(scene, d, n, p, c, rrp, depth)
+                diffuse(scene, o_n, intersection, mtl, rr_prob, weight, depth)
+                |> Vec.add(next_event_estimation(scene, intersection, mtl.color, weight, o_n))
               "Specular" ->
-                specular(scene, d, n, p, c, rrp, depth)
+                specular(scene, ray.dir, intersection, mtl, rr_prob, weight, depth)
               "Refraction" ->
-                refraction(scene, d, n, p, c, ior, rrp, depth)
+                refraction(scene, o_n, ray.dir, intersection, mtl, rr_prob, weight, depth)
             end
-            |> Vec.add(e)
-          {:ng, _} -> e
-        end
+          {:ng, _} -> Const.black
+        end |> Vec.add(direct_light(is_direct, mtl.emission, weight))
       {:ng, _} -> Const.black
     end
   end
-  def russian_roulette(c, depth) do
-    rrp = (c |> Tuple.to_list |> Enum.max) *
-    if depth > Const.max_depth do
-      :math.pow(0.5, depth - Const.max_depth)
-    else
-      1.0
-    end
 
-    if depth > Const.min_depth do
-      if :rand.uniform >= rrp do
+  def direct_light(is_direct, emission, weight) do
+    if is_direct do
+      weight
+      |> Vec.mul(emission)
+    else
+      Const.black
+    end
+  end
+
+  def orienting_normal(d, n) do
+    n |> Vec.mul(if (Vec.dot(n, d) < 0.0), do: 1.0, else: -1.0)
+  end
+
+  def russian_roulette(color, depth) do
+    rr_prob = (color |> Tuple.to_list |> Enum.max)
+
+    if depth > Const.max_depth do
+      if :rand.uniform >= rr_prob do
         {:ng, nil}
       else
-        {:ok, rrp}
+        {:ok, rr_prob}
       end
     else
       {:ok, 1.0}
     end
   end
-  def diffuse(scene, d, n, p, c, rrp, depth) do
-    w = n |> Vec.mul(if (Vec.dot(n, d) < 0.0), do: 1.0, else: -1.0)
-    u =
-    (if abs(elem(w,0)) > Const.eps,
-    do: {0.0, 1.0, 0.0},
-    else: {1.0, 0.0, 0.0})
-    |> Vec.cross(w)
-    |> Vec.normalize
-    v = w |> Vec.cross(u)
 
-    # Importance Sampling
-    r1 = 2 * :math.pi * :rand.uniform
-    r2 = :rand.uniform
-    r2s = :math.sqrt(r2)
-    new_ray = Ray.create(
-      p,
-      u            |> Vec.mul(:math.cos(r1) * r2s)
-      |> Vec.add(v |> Vec.mul(:math.sin(r1) * r2s))
-      |> Vec.add(w |> Vec.mul(:math.sqrt(1.0 - r2)))
-      |> Vec.normalize
-    )
+  def next_event_estimation(scene, intersection, color, weight, orienting_n) do
+    unless Enum.member?(scene.light_id, intersection.id) do
+      {light_pos, light_pdf, light_id} = Scene.sample_light_surface(scene)
+      light_dir  = light_pos |> Vec.sub(intersection.position)
+      dist_sq    = light_dir |> Vec.dot(light_dir)
+      nlight_dir = light_dir |> Vec.normalize
+      shadow_ray = Ray.create(intersection.position, nlight_dir)
 
-    Renderer.radiance(scene, new_ray, depth+1)
-    |> Vec.mul(c |> Vec.div(rrp))
+      case Scene.intersect(scene, shadow_ray) do
+        {:ok, %Intersection{
+          normal: light_n,
+          id: ^light_id
+        }} ->
+          {:ok, light} = Enum.fetch(scene.objects, light_id)
+          dot1 = abs(Vec.dot(orienting_n, nlight_dir))
+          dot2 = abs(Vec.dot(light_n, Vec.mul(nlight_dir, -1.0)))
+          g = dot1 * dot2 / dist_sq
+
+          weight
+          |> Vec.mul(light.material.emission)
+          |> Vec.mul(color |> Vec.div(:math.pi))
+          |> Vec.mul(g)
+          |> Vec.div(light_pdf)
+        _ -> Const.black
+      end
+    else
+      Const.black
+    end
   end
-  def specular(scene, d, n, p, c, rrp, depth) do
-    Renderer.radiance(
-      scene,
-      Ray.create(
-        p,
-        d |> Vec.sub(n |> Vec.mul(2.0 * Vec.dot(n, d)))
-      ),
-      depth+1
-    )
-    |> Vec.mul(c |> Vec.div(rrp))
+
+  def diffuse(scene, o_n, intersection, mtl, rr_prob, weight, depth) do
+    new_ray = cos_weighted_sample(intersection, get_onb(o_n))
+    new_weight = weight
+    |> Vec.mul(mtl.color |> Vec.div(rr_prob))
+    Renderer.radiance(scene, new_ray, new_weight, false, depth+1)
   end
-  def refraction(scene, d, n, p, c, ior, rrp, depth) do
-    reflec = Ray.create(p, Vec.sub(d, Vec.mul(n, 2.0 * Vec.dot(n, d))))
-    o_n = Vec.mul(n, (if Vec.dot(n, d) < 0.0, do: 1.0, else: -1.0))
-    into = Vec.dot(n, o_n) > 0.0
+
+  def specular(scene, dir, intersection, mtl, rr_prob, weight, depth) do
+    reflec = get_reflect(intersection, dir)
+    new_weight = weight |> Vec.mul(mtl.color |> Vec.div(rr_prob))
+    Renderer.radiance(scene, reflec, new_weight, true, depth+1)
+  end
+
+  def refraction(scene, o_n, dir, intersection, mtl, rr_prob, weight, depth) do
+    reflec = get_reflect(intersection, dir)
+    into = Vec.dot(intersection.normal, o_n) > 0.0
 
     # Snell's low
     nc = 1.0
-    nt = ior
+    nt = mtl.ior
     nnt = if into, do: nc / nt, else: nt / nc
-    ddn = Vec.dot(d, o_n)
+    ddn = Vec.dot(dir, o_n)
     cos2t = 1.0 - nnt*nnt * (1.0 - ddn*ddn)
 
     if cos2t < 0.0 do
-      Renderer.radiance(scene, reflec, depth+1)
-      |> Vec.mul(c |> Vec.div(rrp))
+      new_weight = weight |> Vec.mul(mtl.color |> Vec.div(rr_prob))
+      Renderer.radiance(scene, reflec, new_weight, true, depth+1)
     else
-      refrac =
-      Ray.create(p,
-        Vec.mul(d, nnt)
-        |> Vec.sub(Vec.mul(n, (if into, do: 1.0, else: -1.0) * (ddn * nnt + :math.sqrt(cos2t))))
-        |> Vec.normalize
-      )
+      refrac = get_refract(intersection, dir, nnt, into, ddn, nnt, cos2t)
 
       # Schlick's Fresnell estimation
       al = nt - nc
@@ -205,20 +193,64 @@ defmodule Expt.Renderer do
       nnt2 = :math.pow((if into, do: nc / nt, else: nt / nc), 2.0)
       tr = (1.0 - re) * nnt2
 
-      prb = 0.25 + 0.5 * re
-      if depth > 2 do
-        if :rand.uniform < prb do
-          Renderer.radiance(scene, reflec, depth+1) |> Vec.mul(re)
-          |> Vec.mul(c |> Vec.div(prb * rrp))
-        else
-          Renderer.radiance(scene, refrac, depth+1) |> Vec.mul(tr)
-          |> Vec.mul(c |> Vec.div((1.0-prb) * rrp))
-        end
+      prob = 0.25 + 0.5 * re
+      if :rand.uniform < prob do
+        new_weight = weight |> Vec.mul(mtl.color |> Vec.mul(re / prob / rr_prob))
+        Renderer.radiance(scene, reflec, new_weight, true, depth+1)
       else
-                   Renderer.radiance(scene, reflec, depth+1) |> Vec.mul(re)
-        |> Vec.add(Renderer.radiance(scene, refrac, depth+1) |> Vec.mul(tr))
-        |> Vec.mul(c |> Vec.div(rrp))
+        new_weight = weight |> Vec.mul(mtl.color |> Vec.mul(tr / (1.0-prob) / rr_prob))
+        Renderer.radiance(scene, refrac, new_weight, true, depth+1)
       end
     end
   end
+
+  def get_onb(normal) do
+    w = normal
+    u =
+    if abs(elem(w,0)) > Const.eps do
+      {0.0, 1.0, 0.0}
+    else
+      {1.0, 0.0, 0.0}
+    end
+    |> Vec.cross(w)
+    |> Vec.normalize
+    v = w |> Vec.cross(u)
+    %{w: w, u: u, v: v}
+  end
+
+  def cos_weighted_sample(intersection, onb) do
+    r1 = 2 * :math.pi * :rand.uniform
+    r2 = :rand.uniform
+    r2s = :math.sqrt(r2)
+    Ray.create(
+      intersection.position,
+      onb.u            |> Vec.mul(:math.cos(r1) * r2s)
+      |> Vec.add(onb.v |> Vec.mul(:math.sin(r1) * r2s))
+      |> Vec.add(onb.w |> Vec.mul(:math.sqrt(1.0 - r2)))
+      |> Vec.normalize
+    )
+
+  end
+
+  def get_reflect(intersection, dir) do
+    Ray.create(
+      intersection.position,
+      dir
+      |> Vec.sub(
+        Vec.mul(intersection.normal, 2.0 * Vec.dot(intersection.normal, dir))
+      )
+    )
+  end
+
+  def get_refract(intersection, dir, nnt, into, ddn, nnt, cos2t) do
+    Ray.create(
+      intersection.position,
+      Vec.mul(dir, nnt)
+      |> Vec.sub(
+        Vec.mul(intersection.normal, (if into, do: 1.0, else: -1.0) * (ddn * nnt + :math.sqrt(cos2t)))
+      )
+      |> Vec.normalize
+    )
+  end
+
 end

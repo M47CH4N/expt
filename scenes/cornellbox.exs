@@ -1,11 +1,11 @@
-scene = %Expt.Scene{
-  samples: 256,
-  supersamples: 1,
+scene = Expt.Scene.create(
+  samples: 1,
+  supersamples: 2,
   camera: Expt.Camera.create([
     position: {50.0, 52.0, 220.0},
     direction: {0.0, -0.04, -1.0},
-    width: 128,
-    height: 128
+    width: 640,
+    height: 480
   ]),
   objects: [
     %Expt.Sphere{
@@ -81,15 +81,15 @@ scene = %Expt.Scene{
       }
     },
     %Expt.Sphere{
-      radius: 15.0,
-      pos: {50.0, 90.0, 81.6},
+      radius: 5.0,
+      pos: {50.0, 81.6, 81.6},
       material: %Expt.Material{
         type: "Diffuse",
         emission: {36, 36, 36}
       }
-    },
+    }
   ]
-}
+)
 
 IO.puts "Rendering..."
 

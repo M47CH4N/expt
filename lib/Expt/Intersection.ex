@@ -1,4 +1,4 @@
 defmodule Expt.Intersection do
-  defstruct distance: nil, normal: nil, position: nil, material: nil
+  defstruct distance: Expt.Const.inf, normal: nil, position: nil, id: nil
 
 end

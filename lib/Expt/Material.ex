@@ -1,5 +1,6 @@
 defmodule Expt.Material do
-  defstruct type: nil, color: {0.0, 0.0, 0.0}, emission: {0.0, 0.0, 0.0}, ior: nil
+  alias Expt.Const
+  defstruct type: nil, color: Const.black, emission: Const.black, ior: nil
 
   defmodule Ior do
     require Constant

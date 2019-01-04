@@ -11,8 +11,8 @@ defmodule Expt.Const do
   import Constant
 
   const black, {0.0, 0.0, 0.0}
+  const white, {1.0, 1.0, 1.0}
   const eps, 1.0e-6
   const inf, 1.0e128
-  const min_depth, 5
-  const max_depth, 64
+  const max_depth, 5
 end
