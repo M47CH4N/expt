@@ -17,15 +17,13 @@ defmodule Expt.Image do
   end
 
   defp clamp(x, a, b) do x |> max(a) |> min(b) end
-
-  defp mul(a, b), do: a * b
-
   defp to_8bpp(x, scale \\ 255) do
     x
     |> clamp(0.0, 1.0)
     |> :math.pow(1/2.2)
-    |> mul(scale)
+    |> Kernel.*(scale)
     |> round
     |> clamp(0, scale)
   end
+
 end

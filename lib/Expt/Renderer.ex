@@ -1,7 +1,7 @@
 defmodule Expt.Renderer do
   alias Expt.{Renderer, Camera, Scene, Ray, Material, Intersection, Const}
-  import Expt.Operator
   import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
+  import Expt.Operator
 
   def render_seq(%Scene{} = scene) do
     %Scene{
@@ -66,7 +66,7 @@ defmodule Expt.Renderer do
                 scr_x * ((r1 + x) / w - 0.5) +
                 scr_y * ((r2 + y) / h - 0.5)
 
-        ray = Ray.create(pos, normalize(scr_p - pos))
+        ray = %Ray{org: pos, dir: normalize(scr_p - pos)}
         Renderer.radiance(scene, ray, Const.white, true, 0) / s / (ss*ss)
       end
       |> Enum.reduce(Const.black, fn(radiance, acc) -> acc + radiance end)
@@ -127,7 +127,7 @@ defmodule Expt.Renderer do
       light_dir  = light_pos - intersection.position
       dist_sq    = dot(light_dir, light_dir)
       nlight_dir = normalize(light_dir)
-      shadow_ray = Ray.create(intersection.position, nlight_dir)
+      shadow_ray = %Ray{org: intersection.position, dir: nlight_dir}
 
       case Scene.intersect(scene, shadow_ray) do
         {:ok, %Intersection{
@@ -214,28 +214,28 @@ defmodule Expt.Renderer do
     r1 = 2 * :math.pi * :rand.uniform
     r2 = :rand.uniform
     r2s = :math.sqrt(r2)
-    Ray.create(
-      intersection.position,
-      normalize(
+    %Ray{
+      org: intersection.position,
+      dir: normalize(
         onb.u * :math.cos(r1) * r2s +
         onb.v * :math.sin(r1) * r2s +
-        onb.w * :math.sqrt(1.0 - r2)))
+        onb.w * :math.sqrt(1.0 - r2))}
   end
 
   def get_reflect(intersection, dir) do
-    Ray.create(
-      intersection.position,
-      dir - intersection.normal * 2.0 * dot(intersection.normal, dir))
+    %Ray{
+      org: intersection.position,
+      dir: dir - intersection.normal * 2.0 * dot(intersection.normal, dir)}
   end
 
   def get_refract(intersection, dir, nnt, into, ddn, nnt, cos2t) do
-    Ray.create(
-      intersection.position,
-      normalize(
+    %Ray{
+      org: intersection.position,
+      dir: normalize(
         dir * nnt -
         intersection.normal * (if into, do: 1.0, else: -1.0) *
         (ddn * nnt + :math.sqrt(cos2t))
-      ))
+      )}
   end
 
 end

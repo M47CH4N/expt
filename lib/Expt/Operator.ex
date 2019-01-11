@@ -1,6 +1,6 @@
 defmodule Expt.Operator do
-  alias Expt.Operator
   import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
+  alias Expt.Operator
 
   def create(x, y, z) do
     {x, y, z}
@@ -82,6 +82,16 @@ defmodule Expt.Operator do
 
   def normalize(vec) do
     vec / Operator.length(vec)
+  end
+
+  def min({x1, y1, z1} = v1, {x2, y2, z2} = v2)
+    when is_tuple(v1) and is_tuple(v2) do
+    {Kernel.min(x1,x2), Kernel.min(y1,y2), Kernel.min(z1,z2)}
+  end
+
+  def max({x1, y1, z1} = v1, {x2, y2, z2} = v2)
+    when is_tuple(v1) and is_tuple(v2) do
+    {Kernel.max(x1,x2), Kernel.max(y1,y2), Kernel.max(z1,z2)}
   end
 
 end

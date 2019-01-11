@@ -1,11 +1,18 @@
 defmodule Expt.Sphere do
-  alias Expt.{Material, Ray, Sphere, Intersection, Const}
-  import Expt.Operator
+  alias Expt.{BBox, Material, Ray, Sphere, Intersection, Const}
   import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
+  import Expt.Operator
 
   defstruct pos: nil, radius: nil, material: %Material{}
 
   def get_pdf(%Sphere{radius: r}), do: 1.0/(4.0*:math.pi*r*r)
+
+  def get_bbox(%Sphere{pos: p, radius: r}) do
+    %BBox{
+      p_min: p - r,
+      p_max: p + r
+    }
+  end
 
   def sample_surface(%Sphere{pos: pos, radius: r}) do
     r1 = 2 * :math.pi * :rand.uniform

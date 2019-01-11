@@ -1,7 +1,7 @@
 defmodule Expt.Camera do
   alias Expt.{Camera}
-  import Expt.Operator
   import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
+  import Expt.Operator
   defstruct width: nil, height: nil, position: nil, screen_x: nil, screen_y: nil, screen_center: nil
 
   def create(options \\ []) do

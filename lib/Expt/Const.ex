@@ -14,5 +14,7 @@ defmodule Expt.Const do
   const white, {1.0, 1.0, 1.0}
   const eps, 1.0e-6
   const inf, 1.0e128
+  const inf3, {1.0e128, 1.0e128, 1.0e128}
   const max_depth, 5
+
 end

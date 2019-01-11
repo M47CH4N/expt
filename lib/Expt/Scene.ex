@@ -1,6 +1,6 @@
 defmodule Expt.Scene do
   alias Expt.{Scene, Sphere, Intersection, Const}
-  defstruct samples: nil, supersamples: nil,
+  defstruct samples: nil, supersamples: nil, bvh_tree: [],
             camera: nil, objects: [], light_id: []
 
   def create(options) do
