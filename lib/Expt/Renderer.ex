@@ -1,6 +1,6 @@
 defmodule Expt.Renderer do
   alias Expt.{Renderer, Camera, Scene, Ray, Material, Intersection, Const}
-  import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
+  import Kernel, except: [+: 2, -: 1, -: 2, *: 2, /: 2]
   import Expt.Operator
 
   def render_seq(%Scene{} = scene) do
@@ -18,6 +18,7 @@ defmodule Expt.Renderer do
     } = scene
 
     for y <- 0..(height-1) do
+      _ = :rand.seed(:exs1024, {1, 2, 3})
       render_line(scene, width, height, supersamples, samples, y, scr_c, scr_x, scr_y, pos)
     end
   end
@@ -40,6 +41,7 @@ defmodule Expt.Renderer do
 
     for y <- 0..(height-1) do
       spawn fn ->
+        _ = :rand.seed(:exs1024, {1, 2, 3})
         rendered_line = render_line(scene, width, height, supersamples, samples, y, scr_c, scr_x, scr_y, pos)
         send scene_renderer, {(height - y - 1), rendered_line}
       end
@@ -102,7 +104,7 @@ defmodule Expt.Renderer do
   end
 
   def orienting_normal(d, n) do
-    if (dot(n, d) < 0.0), do: n, else: -1.0*n
+    if (dot(n, d) < 0.0), do: n, else: -n
   end
 
   def russian_roulette(color, depth) do
@@ -125,7 +127,6 @@ defmodule Expt.Renderer do
     else
       {light_pos, light_pdf, light_id} = Scene.sample_light_surface(scene)
       light_dir  = light_pos - intersection.position
-      dist_sq    = dot(light_dir, light_dir)
       nlight_dir = normalize(light_dir)
       shadow_ray = %Ray{org: intersection.position, dir: nlight_dir}
 
@@ -135,10 +136,10 @@ defmodule Expt.Renderer do
           id: ^light_id
         }} ->
           {:ok, light} = Enum.fetch(scene.objects, light_id)
-          dot1 = dot(orienting_n, nlight_dir) |> abs
-          dot2 = dot(light_n, nlight_dir * -1.0) |> abs
-          g    = dot1 * dot2 / dist_sq
-
+          dot1    = dot(orienting_n, nlight_dir) |> abs
+          dot2    = dot(light_n, -nlight_dir) |> abs
+          dist_sq = dot(light_dir, light_dir)
+          g       = dot1 * dot2 / dist_sq
           weight * light.material.emission * (color / :math.pi) * g / light_pdf
 
         _ -> Const.black
@@ -180,7 +181,7 @@ defmodule Expt.Renderer do
       be = nt + nc
       r0 = (al*al) / (be*be)
 
-      th = 1.0 - (if into, do: -ddn, else: dot(refrac.dir, o_n * -1.0))
+      th = 1.0 - (if into, do: -ddn, else: dot(refrac.dir, -o_n))
       re = r0 + (1.0 - r0) * :math.pow(th, 5.0)
       nnt2 = :math.pow((if into, do: nc / nt, else: nt / nc), 2.0)
       tr = (1.0 - re) * nnt2

@@ -1,5 +1,5 @@
 defmodule Expt.Operator do
-  import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
+  import Kernel, except: [+: 2, -: 1, -: 2, *: 2, /: 2]
   alias Expt.Operator
 
   def create(x, y, z) do
@@ -14,6 +14,15 @@ defmodule Expt.Operator do
   def ({x1, y1, z1} = v1) + ({x2, y2, z2} = v2)
     when is_tuple(v1) and is_tuple(v2) do
     {Kernel.+(x1, x2), Kernel.+(y1, y2), Kernel.+(z1, z2)}
+  end
+
+  def -a when is_number(a) do
+    Kernel.-(a)
+  end
+
+  def -v when is_tuple(v) do
+    {x, y, z} = v
+    {-x, -y, -z}
   end
 
   def a - b
