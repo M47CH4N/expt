@@ -1,7 +1,6 @@
 defmodule Expt.Renderer do
   alias Expt.{Renderer, Camera, Scene, Ray, Material, Intersection, Const}
-  import Expt.Operator
-  import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
+  use Expt.Operator
 
   def render_seq(%Scene{} = scene) do
     %Scene{

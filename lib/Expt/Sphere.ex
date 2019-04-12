@@ -1,7 +1,6 @@
 defmodule Expt.Sphere do
   alias Expt.{Material, Ray, Sphere, Intersection, Const}
-  import Expt.Operator
-  import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
+  use Expt.Operator
 
   defstruct pos: nil, radius: nil, material: %Material{}
 
