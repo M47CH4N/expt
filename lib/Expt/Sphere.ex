@@ -1,6 +1,6 @@
 defmodule Expt.Sphere do
   alias Expt.{Material, Ray, Sphere, Intersection, Const}
-  use Expt.Operator
+  use Expt.Vector
 
   defstruct pos: nil, radius: nil, material: %Material{}
 

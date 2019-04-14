@@ -1,4 +1,4 @@
-defmodule Expt.Operator do
+defmodule Expt.Vector do
   import Kernel, except: [+: 2, -: 2, *: 2, /: 2]
 
   defmacro __using__(_opts) do

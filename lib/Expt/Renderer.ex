@@ -1,6 +1,6 @@
 defmodule Expt.Renderer do
   alias Expt.{Renderer, Camera, Scene, Ray, Material, Intersection, Const}
-  use Expt.Operator
+  use Expt.Vector
 
   def render_seq(%Scene{} = scene) do
     %Scene{
